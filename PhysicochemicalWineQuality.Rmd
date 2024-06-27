@@ -1,0 +1,428 @@
+---
+title: "Analysis of Physicochemical Factors in Red Portuguese 'Vinho Verde' Wine Quality"
+author: "Nitya Kari"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Data and Packages
+
+```{r}
+data <- read.csv("/Users/nitwit/Desktop/google trends/winequality-red.csv")
+```
+
+> This dataset contains information about physicochemical factors of different types of red Portuguese "Vinho Verde" wine. There are several predictor variables in this dataset (fixed acidity, volatile acidity, citric acid, residual sugar, chlorides, free sulfur dioxide, total sulfur dioxide, density, pH, sulphates, alcohol) with one outcome variable (quality). All of the predictor variables are continuous numeric variables as they can take any number of values while the outcome variable (quality) is an ordinal numeric variable as it rates each wine on a scale of 0 to 10. There are 1599 seperate values in this dataset.
+
+> This dataset was obtained from Kaggle.com (<https://www.kaggle.com/datasets/uciml/red-wine-quality-cortez-et-al-2009/>) but it can also be found on the UCI Machine Learning repository (<https://archive.ics.uci.edu/ml/datasets/wine+quality>).
+
+> Here is the citation for this dataset: P. Cortez, A. Cerdeira, F. Almeida, T. Matos and J. Reis. Modeling wine preferences by data mining from physicochemical properties. In Decision Support Systems, Elsevier, 47(4):547-553, 2009.
+
+```{r}
+require(corrplot)
+require(dplyr)
+require(tidyverse)
+require(ggplot2)
+require(e1071)
+require(stringr)
+require(tidytext)
+require(ggplot2)
+require(psych)
+require(caret)
+require(GGally)
+require(glmnet)
+library(factoextra)
+library(rms)
+```
+
+## Research Question
+
+> Can the predictor variables attained from physicochemical tests in this dataset be aggregated to be used to accurately predict the quality of red wine? This question is important because it will allow people to get a better understanding of which physicochemical factors of wine would make a wine good. This can help people understand which wines they should gravitate towards if given this information. It can also help wine companies figure out which physicochemical properties they should focus on when they develop their alcohol.
+
+## Variables of Interest
+
+> Predictor Variable (all continuous numeric variables): 1 - fixed acidity: most acids involved with wine or fixed or nonvolatile (do not evaporate readily) 2 - volatile acidity: the amount of acetic acid in wine, which at too high of levels can lead to an unpleasant, vinegar taste 3 - citric acid: found in small quantities, citric acid can add 'freshness' and flavor to wines 4 - residual sugar: the amount of sugar remaining after fermentation stops 5 - chlorides: the amount of salt in the wine 6 - free sulfur dioxide: the free form of SO2 exists in equilibrium between molecular SO2 (as a dissolved gas) and bisulfite ion 7 - total sulfur dioxide: amount of free and bound forms of S02 8 - density: the density of water is close to that of water depending on the percent alcohol and sugar content 9 - pH: describes how acidic or basic a wine is on a scale from 0 (very acidic) to 14 (very basic) 10 - sulphates: a wine additive which can contribute to sulfur dioxide gas (S02) levels 11 - alcohol: the percent alcohol content of the wine
+
+> Outcome Variable (ordinal numeric variable): quality -\> output variable (based on sensory data, score between 0 and 10)
+
+## Data Wrangling
+
+```{r}
+data <- na.omit(data) #drop the NAs in dataset
+
+# creating a binary variable based off of the quality variable
+data <- data %>%
+  mutate(qualityBinary = case_when(
+    quality < 7 ~ 0, # if the quality of the wine is rated less than 7, then it is not good quality and is set to 0
+    quality >= 7 ~ 1 # if the quality of the wine is rated 7 or higher, then it is good quality and is set to 1
+  ))
+
+# Selecting relevant variables 
+dataSelection <- data[, c("fixed.acidity", "volatile.acidity", "citric.acid", "residual.sugar", "chlorides", "free.sulfur.dioxide", "total.sulfur.dioxide", "density", "pH", "sulphates", "alcohol", "qualityBinary")]
+```
+
+> After filtering out NA values, I created a binary variable of quality where I assigned a value of "0" to any wine that recieved a quality score of less than 7 on the 0-10 scale and I assigned a value of "1" to any wine that recieved a score of 7 or higher. Essentially, 0 means that the quality was not good and 1 means that the quality was good.
+
+## Visualization
+
+> Since the outcome variable (qualityBinary) is now a binary variable, we will be using box plots to visualize the predictor variables.
+
+```{r}
+ggpairs(dataSelection)
+```
+
+```{r}
+# Visualize the predictors by outcome variable
+plot <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = fixed.acidity)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Fixed Acidity") +
+  ggtitle("Boxplot of Fixed Acidity of Wine by the Wine Quality")
+
+plot2 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = volatile.acidity)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Volatile Acidity") +
+  ggtitle("Boxplot of Volatile Acidity of Wine by the Wine Quality")
+
+plot3 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = citric.acid)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Citric Acid") +
+  ggtitle("Boxplot of Citric Acid in Wine by the Wine Quality")
+
+plot4 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = residual.sugar)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Residual Sugar") +
+  ggtitle("Boxplot of Residual Sugar in Wine by the Wine Quality")
+
+plot5 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = chlorides)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Chlorides") +
+  ggtitle("Boxplot of Chlorides in Wine by the Wine Quality")
+
+plot6 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = free.sulfur.dioxide)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Free Sulfur Dioxide") +
+  ggtitle("Boxplot of Free Sulfur Dioxide in Wine by the Wine Quality")
+
+plot7 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = total.sulfur.dioxide)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Total Sulfur Dioxide") +
+  ggtitle("Boxplot of Total Sulfur Dioxide in Wine by the Wine Quality")
+
+plot8 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = density)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Density") +
+  ggtitle("Boxplot of Density of Wine by the Wine Quality")
+
+plot9 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = pH)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "pH") +
+  ggtitle("Boxplot of pH of Wine by the Wine Quality")
+
+plot10 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = sulphates)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Sulphates") +
+  ggtitle("Boxplot of Sulphates of Wine by the Wine Quality")
+
+plot11 <- ggplot(dataSelection, aes(x = factor(qualityBinary), y = alcohol)) +
+  geom_boxplot() +
+  labs(x = "Wine Quality", y = "Alcohol") +
+  ggtitle("Boxplot of Alcohol Content of Wine by the Wine Quality")
+
+plot
+plot2
+plot3
+plot4
+plot5
+plot6
+plot7
+plot8
+plot9
+plot10
+plot11
+```
+
+> Using the boxplots, we can easily see which physicochemical factors are more or less present in better quality red wines. Fixed acidity, citric acid, residual sugar, sulphates, and the alcohol content all appear to be higher in better quality wines while volatile acidity, chlorides, free sulfur dioxide, total sulfur dioxide, density, and pH appear to be lower.
+
+## Dimension Reduction through PCA
+
+> First, I will be checking for multicollinearity
+
+```{r}
+corr_data <- cor(dataSelection) #find correlations of all variables
+corr_data
+
+par(oma = c(0, 0, 0, 0)) 
+
+corrplot(
+  corr_data,
+  type = "lower",
+  tl.pos = "ld",
+  diag = FALSE,
+  tl.cex = 1,
+  method = "color",
+  addCoef.col = "black",
+  tl.col = "black",
+  tl.srt = 45,
+  is.corr = FALSE,
+  addCoef.cex = 0.5,  # Adjust the size of the coefficient text
+  number.digits = 2   # Set the number of digits after the decimal point
+)
+```
+
+> Although there is correlation in the data, none of the correlation values are higher than threshold of 0.899. As such, there is no need to take into consideration multicollinearity for this dataset.
+
+> Before scaling the predictor variables, I will remove the outcome variable.
+
+```{r}
+data_pca <- dataSelection[, c("fixed.acidity", "volatile.acidity", "citric.acid", "residual.sugar", "chlorides", "free.sulfur.dioxide", "total.sulfur.dioxide", "density", "pH", "sulphates", "alcohol")]
+
+#Scaling the variables
+scaled_data <- data_pca %>%
+  mutate_at(c(1:11), ~(scale(.) %>% as.vector)) #scale the variables
+
+#Visualize PCA Data
+viz_pca <- prcomp(scaled_data, center = TRUE,scale. = TRUE)
+summary(viz_pca)
+
+viz_pca$rotation 
+```
+
+```{r}
+fviz_pca_ind(viz_pca,
+             c = "point", # setting c to point
+             col.ind = "cos2", # coloring based on the quality of representation,
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), # setting the color gradient
+             repel = FALSE
+)
+```
+
+> It is hard to glean any specific information from this plot.
+
+```{r}
+fviz_pca_var(viz_pca,
+             col.var = "contrib", # coloring based on contribution to the PC
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # mitigating text overlap
+)
+```
+
+> Looking at this, we can see thta there may be some groupings forming. Fixed acidity, citric acid, and sulphates appear to be grouped together while density, chlorides, residual sugar, total and free sulfur dioxide could be grouped together.
+
+```{r}
+fviz_pca_biplot(viz_pca, repel = TRUE,
+ col.var = "#00AFBB", 
+ col.ind = "#E7B800" #this one combines the first two graphs
+ )
+```
+
+```{r}
+# Barlett's test
+cortest.bartlett(scaled_data, 1599)
+
+# KMO
+KMO(scaled_data)
+```
+
+> Since the p-value indicates that this is significant, we can use PCA.
+
+> The Overall MSA value and the MSA values for each of the predictor variables are pretty subpar for the most part. The only outlier is citric acid with a MSA value of 0.7. For the sake of this project, I will be dropping variables with MSA values beneath 0.4--residual sugar and density.
+
+```{r}
+scaled_data_pca <- scaled_data %>%
+  dplyr::select(!density) %>%
+  dplyr::select(!residual.sugar)
+
+KMO(scaled_data_pca)
+```
+
+> This is slightly better, but there are still low MSA values
+
+```{r}
+scaled_data_pca <- scaled_data_pca %>%
+  dplyr::select(!chlorides) %>%
+  dplyr::select(!total.sulfur.dioxide )
+
+KMO(scaled_data_pca)
+```
+
+> This is much better, but there are still low MSA values
+
+```{r}
+scaled_data_pca <- scaled_data_pca %>%
+  dplyr::select(!alcohol)
+
+KMO(scaled_data_pca)
+```
+
+> We can now proceed!
+
+```{r}
+# base PCA
+pcaBase <- principal(scaled_data_pca, nfactors = 6, rotate = "none") 
+plot(pcaBase$values, type = "b")
+
+parallel_pca <- fa.parallel(
+  x = scaled_data_pca, fa = "pc",
+  sim = FALSE # ensures resampling
+)
+```
+
+> This indicates that 2 components would be best.
+
+```{r}
+pca_resid <- principal(scaled_data_pca, nfactors = 2, rotate = "oblimin", residuals = TRUE)
+pca_resid #results
+```
+
+```{r}
+#Residuals
+corMatrix<-cor(scaled_data_pca) 
+residuals<-factor.residuals(corMatrix, pca_resid$loadings)
+hist(residuals)
+```
+
+> The residuals appear to be mostly normally distributed with a slight right skew.
+
+```{r}
+# Check loadings
+loadings <- round(pca_resid$loadings[,1:2], 6)
+# For interpretation, set less than 0.30 to ""
+loadings[loadings < 0.30] <- ""
+# Print loadings
+View(as.data.frame(loadings))
+```
+
+> Looking at this, it appears that two groups have formed one with fixed acidity, sulphates, and citric acid. I will name this group "Acidity". The other group is the free sulphur dioxide, and and suplphates. I will name this group "Sulphur".
+
+```{r}
+# Informed PCA
+pca_final <- principal(scaled_data_pca, nfactors = 2, rotate = "promax")
+pca_final
+plot(pca_final)
+```
+
+```{r}
+fa.diagram(pca_final) #seeing which sentiments make up each dimensions
+```
+
+> The two groups remain "Acidity" and "Sulphur".
+
+## Modeling the Data
+
+```{r}
+#adding the outcome variable back into the dataset
+regressionData <- bind_cols(pca_final$scores, dataSelection$qualityBinary) %>%
+  rename(qualityBinary = ...3)
+
+cor(regressionData)
+```
+
+> None of the variables are heavily correlated so we cannot use them in the regression
+
+```{r}
+logm <- glm(
+  formula = qualityBinary ~ .,
+  data = regressionData,
+  family = "binomial" # logistic
+)
+# Print summary
+summary(logm)
+
+car::vif(logm)
+```
+
+> All predictors are significant so we do not remove anything. Since the VIF values low, there is not much multicollinearity.
+
+```{r}
+coef(logm)
+oddsRatio <- exp(coef(logm))
+oddsRatio
+```
+
+> For each one-unit increase in RC1 (Acidity), the odds of the outcome (qualityBinary) increase by approximately 1.62 (or 1.58) times, assuming all other variables are constant. For each one-unit increase in RC2 (Sulphur), the odds of the outcome increase by approximately 1.58 times, holding other variables constant.
+
+```{r}
+# Obtain probabilities
+probs <- predict(
+  logm,
+  type = "response"
+# needed for probabilities
+)
+
+# Obtain classes
+classes <- factor(
+ifelse(
+  probs > 0.50,
+  0, # if TRUE -> high quality wine
+  1 # if FALSE -> lower quality wine
+  )
+)
+levels(classes)
+regressionData$qualityBinary <- factor(regressionData$qualityBinary)
+levels(regressionData$qualityBinary)
+```
+
+```{r}
+trainSet <- regressionData%>% #creating a training set with 70% of the data
+ sample_frac(0.7)
+
+testSet <- anti_join(regressionData, trainSet)
+
+set.seed(135) #setting the seed for replicability
+trainControl <- trainControl(method = "cv", number = 10) #10 time cross training for the training set
+lmtenStep <- train(qualityBinary~., data=trainSet, method="glm", family=binomial(), trControl=trainControl) #training the model using the cross-trained stuff
+summary(lmtenStep)
+```
+
+```{r}
+finalModel <- glm(qualityBinary ~ RC1 + RC2, data = trainSet, family = binomial) #making a new logistic model and looking at the summary
+summary(finalModel)
+```
+
+```{r}
+finalModelStat <- lrm(qualityBinary ~ RC1 + RC2, data = trainSet) #done for additional statistics
+finalModelStat
+```
+
+```{r}
+predicted <- predict(finalModel, testSet)
+
+# Create ActualPredicted dataframe including qualityBinary, predicted, and aboveMedian
+ActualPredicted <- testSet %>%
+  dplyr::select(qualityBinary) %>%
+  mutate(predicted = as.factor(ifelse(predicted >= 0.5, 1, 0)),  # Using 0.5 as threshold for binary classification
+         aboveMedian = as.factor(ifelse(qualityBinary == "1", "1", "0")))  # Assuming "1" is your positive class
+
+# Ensure predicted column has the same levels as qualityBinary column
+levels(ActualPredicted$predicted) <- levels(ActualPredicted$qualityBinary)
+
+# Create confusion matrix
+conf_matrix <- confusionMatrix(ActualPredicted$predicted, ActualPredicted$qualityBinary,
+                               mode = "everything", positive = "1")
+```
+
+```{r}
+mosaic <- table(ActualPredicted$aboveMedian, ActualPredicted$predicted) #making a beautiful mosaic plot :)
+mosaicplot(mosaic,
+ main = "Confusion Matrix for Wine Quality Logistic Regression",
+ sub = "Accuracy of Prediction",
+ xlab = "Predicted",
+ ylab = "Actual",
+ color = "lightblue",
+ border = "mediumpurple3")
+```
+
+## Discussion
+
+> For this project, I started out by creating visual representations of the data through box plots and then conducted a PCA to find relevant variables. I also used PCA to conduct dimension reduction. I then conducted a 10-fold cross validation to train a model and then created a confusion matrix.
+
+> Overall, the model appears to perform well with a high accuracy rate of 88.68%. Additionally, with a p-value of 1.061e-09, we can reject the null hypothesis and accept the alternative hypothesis that we can use predictor variables attained from physicochemical tests in this dataset be aggregated to be used to accurately predict the quality of red wine. Additionally, specificity of this model is also quite high at 88.92% which means that it has a decent ability at correctly identifying the quality of wine (good or low quality). However, it is important to note that the precision score and F1 score is quite low. Additionally, the Kappa score is negative (-0.0052), indicating poor agreement between predicted and observed classes. Although this model appears to be accurate, it does not perform well in terms of prediction when you compare the values to the actual values in the dataset. The mosaic graph also showcases this.
+
+> As mentioned earlier, an ideal version of this model would be incredibly helpful in allowing people to get a better understanding of which physicochemical factors of wine would make a wine good. It can also help wine companies priorities certain physicochemical elements of their wine to create a better tasting wine. Certain limitations of this dataset would be that there is no data about grape types, wine brands, wine selling price, etc. This would give us extra information as to why certain wines would be in higher quality compared to others. This could help address some of the variances that we see in the dataset, regardless of physiocochemical properties.
+
+> If I were to redo this project in the future, I would perform ordinal logistic regression rather than binary logistic regression. I think this would be helpful because it would account for the entire quality scale (0-10) of the original outcome variable. This may also help account for more of the variances in the physicochemical factor levels. It is quite hard to firmly declare all wines with a score of 7 or higher as being good and vice versa as a wine with a quality of 10 would have much different properties to a wine with a quality of 7. The same can be said about a wine with a quality score of 6 to a score of 0.
